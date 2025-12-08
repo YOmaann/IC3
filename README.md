@@ -11,3 +11,8 @@ This is a SAT based verification algorithm technique.
 
 | yes -> $P*$ and **SAFE**
 | no -> $CTI$ and *unSAFE*
+
+## References
+
+1. A. R. Bradley. SAT-based model checking without unrolling. In Proc. VMCAI, 2011.
+2. A. R. Bradley and Z. Manna. Checking safety by inductive generalization of counterexamples to induction. In Proc. FMCAD, 2007.
