@@ -32,7 +32,7 @@ def recBlockCube(Z, frames, T, P_expr, init_expr, bad_cube, start_frame):
             frames.add_blocked_cube(frame, gen_cube)
             print(f'    Blocked at F[{frame}]: {gen_cube}')
             if frame < frames.depth():
-                push(frame + 1, gen_cube)
+                push(frame + 1, cube)
         else:
             assert pred is not None
             push(frame - 1, pred)

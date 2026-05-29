@@ -28,8 +28,9 @@ class IncrementalSolver:
                 a[v] = saved               
         return {v: (a[v] == 1) for v in self.ckt.state if a[v] is not X}
 
-    def _ternary_bad(self, bad01):
+    def _ternary_bad(self, bad01, ival):
         a = dict(bad01)
+        a.update(ival or {})
         for v in self.ckt.state:
             if a[v] is X:
                 continue
@@ -37,7 +38,7 @@ class IncrementalSolver:
             a[v] = X
             self.stats['probes'] += 1
             if self.ckt.ternary_prop(a) == 0:
-                pass                        
+                pass
             else:
                 a[v] = saved
         return {v: (a[v] == 1) for v in self.ckt.state if a[v] is not X}
@@ -50,14 +51,19 @@ class IncrementalSolver:
         self.solver.add(frames.get_R(N, vd))
         self.solver.add(Not(P_expr))
         result = None
+        ival = None
         if self.solver.check() == sat:
-            result = extract_cube(self.solver.model(), vd, self.variables)
+            m = self.solver.model()
+            result = extract_cube(m, vd, self.variables)
+            iv = self.ckt.input_vars()
+            ival = {n: (1 if is_true(m.eval(iv[n], model_completion=True)) else 0)
+                    for n in self.ckt.inputs}
         self.solver.pop()
         if result is not None and self.use_ternary:
             bad01 = {v: (1 if result[v] else 0) for v in self.variables}
             self.stats['minterms'] += 1
             self.stats['lits_in'] += len(result)
-            result = self._ternary_bad(bad01)
+            result = self._ternary_bad(bad01, ival)
             self.stats['lits_out'] += len(result)
         return result
 

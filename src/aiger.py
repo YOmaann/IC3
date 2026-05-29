@@ -1,6 +1,14 @@
 # Aiger parser
 from z3 import *
 from circuit import *
+from ic3 import PDR
+from utils.print import r_print
+from enum import Enum
+
+class Result(Enum):
+    SAFE=1
+    UNSAFE=2
+    UNKNOW=3
 
 def _decode_varlen(buf, pos):
     shift = 0; res = 0
@@ -36,15 +44,17 @@ def parse_aiger(data):
         p += L
         outputs = [int(lines[p + k]) for k in range(O)];          
         p += O
-        bads    = [int(lines[p + k]) for k in range(B)];          
+        bads    = [int(lines[p + k]) for k in range(B)];
         p += B
-        p += C                                                    
+        constraints = [int(lines[p + k]) for k in range(C)];
+        p += C
         ands = {}
         for k in range(A):
             lhs, r0, r1 = map(int, lines[p + k].split())
             ands[lhs >> 1] = (r0, r1)
         return dict(M=M, I=I, L=L, O=O, A=A, B=B, C=C, inputs=inputs,
-                    latches=latches, outputs=outputs, bads=bads, ands=ands)
+                    latches=latches, outputs=outputs, bads=bads,
+                    constraints=constraints, ands=ands)
 
     nl = data.index(b'\n')
     nums = list(map(int, data[:nl].split()[1:]))
@@ -67,7 +77,7 @@ def parse_aiger(data):
         latches.append((own, t[0], t[1] if len(t) > 1 else 0))
     outputs = [int(read_line()) for _ in range(O)]
     bads    = [int(read_line()) for _ in range(B)]
-    for _ in range(C): read_line()
+    constraints = [int(read_line()) for _ in range(C)]
     ands = {}
     for k in range(A):
         lhs = 2 * (I + L + 1 + k)
@@ -76,7 +86,8 @@ def parse_aiger(data):
         r0 = lhs - d0
         ands[lhs >> 1] = (r0, r0 - d1)
     return dict(M=M, I=I, L=L, O=O, A=A, B=B, C=C, inputs=inputs,
-                latches=latches, outputs=outputs, bads=bads, ands=ands)
+                latches=latches, outputs=outputs, bads=bads,
+                constraints=constraints, ands=ands)
 
 
 def aiger_to_circuit(a):
@@ -107,9 +118,58 @@ def aiger_to_circuit(a):
         nxt[name] = lit(nlit)
         if   reset == 0:     init_terms.append(Not(Bool(name)))
         elif reset == 1:     init_terms.append(Bool(name))
-        elif reset == own:   pass                              # uninitialized
-        else:                init_terms.append(Bool(name) == lit(reset))  # reset function
+        elif reset == own:   pass                             
+        else:                init_terms.append(Bool(name) == lit(reset))
     init = And(*init_terms) if init_terms else BoolVal(True)
     targets = a['bads'] if a['bads'] else a['outputs']
-    prop = And(*[Not(lit(t)) for t in targets]) if targets else BoolVal(True)
+    bad = Or(*[lit(t) for t in targets]) if targets else BoolVal(False)
+
+    constraints = a.get('constraints', [])
+    if constraints:
+        env  = And(*[lit(c) for c in constraints])
+        viol = Bool('__viol__')
+        state = state + ['__viol__']
+        nxt['__viol__'] = Or(viol, Not(env))
+        init = And(init, Not(viol))
+        prop = Not(And(bad, Not(viol), env))
+    else:
+        prop = Not(bad)
+
     return Circuit(state, inputs, nxt, init, prop)
+
+def load_aiger_file(path):
+    with open(path, 'rb') as f:
+        data = f.read()
+    parsed = parse_aiger(data)
+    return parsed, aiger_to_circuit(parsed)
+
+def aiger_info(parsed):
+    a = parsed
+    return (f"inputs(I)={a['I']}  latches(L)={a['L']}  ands(A)={a['A']}  "
+            f"outputs(O)={a['O']}  bad(B)={a['B']}  constraints(C)={a['C']}")
+
+class _Timeout(Exception):
+    pass
+
+def sanitize_aiger_file(path, max_latches, max_ands,
+                   timeout_s=60, allow_constraints=False):
+    try:
+        parsed = parse_aiger(open(path, 'rb').read())
+    except ValueError as e:           
+        r_print(f'[red]Error: [\red]cannot use this file: {e}')
+        return False
+    except Exception as e:
+        r_print(f'[red]Error: [\red]parse failed (not a valid AIGER file?): {e} > ~ <')
+        return False
+
+    R_print('  ' + aiger_info(parsed))
+    if parsed['C'] > 0 and not allow_constraints:
+        r_print('[yellow]SKIP:[/yellow] file has invariant constraints, which this safety engine '
+              'does not model.')
+        return False
+    if parsed['L'] > max_latches or parsed['A'] > max_ands:
+        r_print(f'[yellow]SKIP:[/yellow] too large for this [i]weak[/i] solver '
+              f'([b]limits[/b]: latches<={max_latches}, ands<={max_ands}). ')
+        return False
+
+    return parsed
