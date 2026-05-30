@@ -18,7 +18,7 @@ class DeltaFrames:
         if k == 0:
             return self.init_expr
         clauses = []
-        for i in range(k, len(self.F)):   # k onward — original, correct
+        for i in range(k, len(self.F)):
             for cube in self.F[i]:
                 clauses.append(negate_cube(cube, vd))
         if not clauses:
@@ -46,4 +46,5 @@ class DeltaFrames:
     def print_frames(self):
         for i in range(1, len(self.F)):
             if self.F[i]:
-                print(f'    F[{i}]: {self.F[i]}')
+                cubes = ', '.join(f'({fmt_cube(c)})' for c in self.F[i])
+                print(f'    F[{i}]  ({len(self.F[i])} blocked): {cubes}')

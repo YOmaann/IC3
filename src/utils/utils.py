@@ -35,3 +35,9 @@ def negate_cube(cube, vd):
 
 def subsumes(a, b):
     return a.items() <= b.items()
+
+
+def fmt_cube(cube):
+    if not cube:
+        return "true"
+    return " & ".join(n if v else "~" + n for n, v in cube.items())

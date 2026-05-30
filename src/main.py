@@ -14,7 +14,7 @@ import signal, contextlib, io, os, sys
 from ic3 import PDR
 
 # Rich configurations
-console = Console(file=sys.stdout)   # bound to real stdout so redirect_stdout can't swallow the spinner
+console = Console(file=sys.stdout)
 progress = Progress(
     SpinnerColumn(),
     TextColumn("[progress.description]{task.description}"),
@@ -49,8 +49,8 @@ layout.split(
     Layout(name="main", ratio=1)
 )
 
-# per file PDR — drives the given `task` row and returns a verdict string
-def verify_aiger_file(path, task, max_frames, no_propagate, timeout_s, no_ternary):
+# per file PDR
+def verify_aiger_file(path, out_dir, task, max_frames, no_propagate, timeout_s, no_ternary):
     progress.update(task, description=f"Loading [i]{path.name}[/i]...")
     parsed, ckt = load_aiger_file(path)
     if not parsed:
@@ -65,11 +65,12 @@ def verify_aiger_file(path, task, max_frames, no_propagate, timeout_s, no_ternar
         signal.alarm(timeout_s)
 
     try:
-        with contextlib.redirect_stdout(io.StringIO()):   # hide per-frame chatter
+        log_path = out_dir / f'{path.stem}.log'
+        with open(log_path, 'w') as logf, contextlib.redirect_stdout(logf):
             inv = PDR(ckt, do_propagate=not no_propagate,
                       max_frames=max_frames, use_ternary=not no_ternary)
-        verdict = ('UNSAFE (counterexample exists)' if inv is False
-                   else 'SAFE — property holds' if inv is not None
+        verdict = ('UNSAFE' if inv is False
+                   else 'SAFE : property holds' if inv is not None
                    else 'UNKNOWN (frame bound reached)')
         if inv not in (False, None):
             console.print(f'[yellow]Invariant:[/yellow] {inv}')
@@ -110,9 +111,11 @@ parameters = [args.max_frames, args.no_propagate, args.timeout, args.no_ternary]
 if args.file:
     path = Path(args.file)
     if path.is_file():
+        out_dir = path.parent / 'output'
+        out_dir.mkdir(parents=True, exist_ok=True)
         with progress:
             task = progress.add_task("", total=None)
-            verdict = verify_aiger_file(path, task, *parameters)
+            verdict = verify_aiger_file(path, out_dir, task, *parameters)
             progress.remove_task(task)
         console.print(f"{status_icon(verdict)} {path.name} — {verdict}")
     elif path.is_dir():
@@ -120,13 +123,15 @@ if args.file:
         if not aiger_files:
             r_print(f'[red]No .aag/.aig files found under "{path}".[/red]')
             exit()
+        out_dir = path / 'output'
+        out_dir.mkdir(parents=True, exist_ok=True)
         overall.update(verify_task_progress, total=len(aiger_files))
         with Live(group_progress, console=console):
             for file in aiger_files:
                 task = progress.add_task("", total=None)
-                verdict = verify_aiger_file(file, task, *parameters)
+                verdict = verify_aiger_file(file, out_dir, task, *parameters)
                 progress.remove_task(task)
-                console.print(f"{status_icon(verdict)} {file.name} — {verdict}")
+                console.print(f"{status_icon(verdict)} {file.name} :: {verdict}")
                 overall.advance(verify_task_progress)
     else:
         r_print('[red bold]ERROR:[/red bold] folder or file does not exist.')

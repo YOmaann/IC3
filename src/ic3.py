@@ -30,7 +30,7 @@ def recBlockCube(Z, frames, T, P_expr, init_expr, bad_cube, start_frame):
         if status == 'blocked':
             gen_cube = Z.generalize(cube, frame, frames, T, init_expr)
             frames.add_blocked_cube(frame, gen_cube)
-            print(f'    Blocked at F[{frame}]: {gen_cube}')
+            print(f'      learned: frame {frame} can never reach  {fmt_cube(gen_cube)}')
             if frame < frames.depth():
                 push(frame + 1, cube)
         else:
@@ -61,7 +61,7 @@ def propagate(Z, frames, T):
             frames.add_blocked_cube(min(k + 1, N), cube)
 
         if len(frames.F[k]) == 0:
-            print(f'  Fixpoint: F[{k}] empty')
+            print(f'  fixpoint reached: frame {k} is empty, so R[{k}] = R[{k + 1}] is an inductive invariant.')
             return k
 
     return False  
@@ -91,26 +91,26 @@ def PDR(ckt, do_propagate=True, max_frames=200, use_ternary=True):
     Z.solver.add(Not(P_expr))
     if Z.solver.check() == sat:
         Z.solver.pop()
-        print('Init violates P.')
+        print('  the initial state already violates the property')
         return False
     Z.solver.pop()
 
     for _ in range(max_frames):
         frames.new_frame()
         N = frames.depth()
-        print(f'\n=== Frame {N} >>>')
+        print(f'\nFrame {N}: extending the trace >>>')
 
         while True:
             bad = Z.getBadCube(frames, P_expr)
             if bad is None:
                 break
-            print(f'  Bad: {bad}')
+            print(f'  found a state that leads to a violation. trying to block it: {fmt_cube(bad)}')
             if not recBlockCube(Z, frames, T, P_expr, init_expr, bad, N):
-                print('\n** PROPERTY FAILS **')
+                print('\n* PROPERTY FAILS: a bad state is reachable from the initial states. *')
                 Z._report_ternary()
                 return False
 
-        print(f'  Frame {N} clean.')
+        print(f'  frame {N} is clean: no property violation is reachable within {N} steps.')
         frames.print_frames()
 
         if do_propagate and N >= 2:
@@ -119,12 +119,12 @@ def PDR(ckt, do_propagate=True, max_frames=200, use_ternary=True):
                 inv = simplify(frames.get_R(k, vd))
                 if '__viol__' in vd:
                     inv = drop_var(inv, vd['__viol__'])
-                print(f'\n* Property HOLDS *')
-                print(f'Invariant: {inv}')
+                print('\n*PROPERTY HOLDS: found an inductive invariant.*')
+                print(f'  invariant (frame {k}): {inv}')
                 Z._report_ternary()
                 return inv
 
-    print(f'Reached max_frames.')
+    print(f'  reached the {max_frames}-frame limit without deciding.')
     if use_ternary:
         Z._report_ternary()
     return None
