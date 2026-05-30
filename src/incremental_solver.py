@@ -8,7 +8,12 @@ class IncrementalSolver:
         self.variables = variables
         self.ckt = ckt                       # the circuit, for ternary simulation
         self.use_ternary = use_ternary
-        self.stats = {'minterms': 0, 'lits_in': 0, 'lits_out': 0, 'probes': 0}
+        self.stats = {'minterms': 0, 'lits_in': 0, 'lits_out': 0, 'probes': 0,
+                      'sat_calls': 0}
+
+    def _check(self, *assumptions):
+        self.stats['sat_calls'] += 1
+        return self.solver.check(*assumptions)
 
     def _bind(self):
         return bind(self.variables)
@@ -52,7 +57,7 @@ class IncrementalSolver:
         self.solver.add(Not(P_expr))
         result = None
         ival = None
-        if self.solver.check() == sat:
+        if self._check() == sat:
             m = self.solver.model()
             result = extract_cube(m, vd, self.variables)
             iv = self.ckt.input_vars()
@@ -72,7 +77,7 @@ class IncrementalSolver:
         self.solver.push()
         self.solver.add(init_expr)
         self.solver.add(cube_to_expr(cube, vd))
-        res = self.solver.check() == sat
+        res = self._check() == sat
         self.solver.pop()
         return res
 
@@ -86,7 +91,7 @@ class IncrementalSolver:
         self.solver.add(T(vd, vdp))
         self.solver.add(cube_to_expr(cube, vdp))
 
-        if self.solver.check() == sat:
+        if self._check() == sat:
             if extract_model:
                 m = self.solver.model()
                 pred = extract_cube(m, vd, self.variables)
@@ -121,7 +126,7 @@ class IncrementalSolver:
             acts[act.decl().name()] = var
             assumptions.append(act)
 
-        if self.solver.check(assumptions) != unsat:
+        if self._check(assumptions) != unsat:
             self.solver.pop()
             return dict(cube)
 

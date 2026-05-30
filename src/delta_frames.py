@@ -7,6 +7,10 @@ class DeltaFrames:
         self.init_expr = init_expr
         self.variables = variables
         self.F = [[]]
+        self.learned = 0
+
+    def total_clauses(self):
+        return sum(len(f) for f in self.F)
 
     def depth(self):
         return len(self.F) - 1
