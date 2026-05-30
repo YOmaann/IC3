@@ -8,6 +8,7 @@ class DeltaFrames:
         self.variables = variables
         self.F = [[]]
         self.learned = 0
+        self.on_add_clause = None
 
     def total_clauses(self):
         return sum(len(f) for f in self.F)
@@ -38,6 +39,8 @@ class DeltaFrames:
                 return False
         self.F[k] = [c for c in self.F[k] if not subsumes(cube, c)]
         self.F[k].append(cube)
+        if self.on_add_clause:
+            self.on_add_clause(k, cube)
         return True
 
     def is_cube_blocked(self, k, cube):

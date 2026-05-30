@@ -101,6 +101,7 @@ def PDR(ckt, do_propagate=True, max_frames=200, use_ternary=True, use_unsatcore=
 
     frames = DeltaFrames(init_expr, variables)
     Z = IncrementalSolver(variables, ckt, use_ternary=use_ternary, timeout_s=timeout_s)
+    frames.on_add_clause = Z.add_frame_clause
     t0 = time.perf_counter()
     finish = make_finish(frames, Z, t0)
     report = make_report(on_update, frames, Z, t0)

@@ -12,6 +12,10 @@ class IncrementalSolver:
         self.deadline = (time.monotonic() + timeout_s) if timeout_s and timeout_s > 0 else None
         self.stats = {'minterms': 0, 'lits_in': 0, 'lits_out': 0, 'probes': 0,
                       'sat_calls': 0}
+        self.vd, self.vdp = bind(variables)
+        self.act_T = Bool('__trans_act')
+        self.solver.add(Implies(self.act_T, ckt.T()(self.vd, self.vdp)))
+        self.acts = {}
 
     def _check(self, *assumptions):
         self.stats['sat_calls'] += 1
@@ -26,7 +30,18 @@ class IncrementalSolver:
         return result
 
     def _bind(self):
-        return bind(self.variables)
+        return self.vd, self.vdp
+
+    def _act(self, k):
+        if k not in self.acts:
+            self.acts[k] = Bool(f'__frame_act_{k}')
+        return self.acts[k]
+
+    def add_frame_clause(self, k, cube):
+        self.solver.add(Or(Not(self._act(k)), negate_cube(cube, self.vd)))
+
+    def _assume_R(self, k):
+        return [act for i, act in self.acts.items() if i >= k]
 
     def _ternary_predecessor(self, pred01, ival, target):
         a = dict(pred01)
@@ -63,11 +78,10 @@ class IncrementalSolver:
         vd, _ = self._bind()
         N = frames.depth()
         self.solver.push()
-        self.solver.add(frames.get_R(N, vd))
         self.solver.add(Not(P_expr))
         result = None
         ival = None
-        if self._check() == sat:
+        if self._check(self._assume_R(N)) == sat:
             m = self.solver.model()
             result = extract_cube(m, vd, self.variables)
             iv = self.ckt.input_vars()
@@ -95,13 +109,16 @@ class IncrementalSolver:
                       extract_model=True, use_ind=True):
         vd, vdp = self._bind()
         self.solver.push()
-        self.solver.add(frames.get_R(k - 1, vd))
         if use_ind:
             self.solver.add(Not(cube_to_expr(cube, vd)))
-        self.solver.add(T(vd, vdp))
         self.solver.add(cube_to_expr(cube, vdp))
+        if k - 1 == 0:
+            self.solver.add(frames.init_expr)
+            assumps = [self.act_T]
+        else:
+            assumps = self._assume_R(k - 1) + [self.act_T]
 
-        if self._check() == sat:
+        if self._check(assumps) == sat:
             if extract_model:
                 m = self.solver.model()
                 pred = extract_cube(m, vd, self.variables)
@@ -125,9 +142,12 @@ class IncrementalSolver:
     def generalize_unsat(self, cube, k, frames, T, init_expr):
         vd, vdp = self._bind()
         self.solver.push()
-        self.solver.add(frames.get_R(k - 1, vd))
         self.solver.add(Not(cube_to_expr(cube, vd)))
-        self.solver.add(T(vd, vdp))
+        if k - 1 == 0:
+            self.solver.add(frames.init_expr)
+            base = [self.act_T]
+        else:
+            base = self._assume_R(k - 1) + [self.act_T]
 
         acts, assumptions = {}, []
         for var, val in cube.items():
@@ -136,14 +156,15 @@ class IncrementalSolver:
             acts[act.decl().name()] = var
             assumptions.append(act)
 
-        if self._check(assumptions) != unsat:
+        if self._check(base + assumptions) != unsat:
             self.solver.pop()
             return dict(cube)
 
         core = self.solver.unsat_core()
         self.solver.pop()
 
-        gen = {acts[c.decl().name()]: cube[acts[c.decl().name()]] for c in core}
+        gen = {acts[c.decl().name()]: cube[acts[c.decl().name()]]
+               for c in core if c.decl().name() in acts}
         for var, val in cube.items():
             if not self.isInitial(gen, init_expr):
                 break
