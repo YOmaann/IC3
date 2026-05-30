@@ -98,7 +98,7 @@ parser.add_argument('--max-latches', type=int, default=1000,
 args = parser.parse_args()
 
 r_print('Welcome to [bold magenta]ICEpie[/bold magenta] :)\n')
-if not args.file and not args.benchmark:
+if not args.file:
     r_print('[red]Oops :0 Please provide either a file or a benchmark to verify.[/red]')
     r_print('''This is an implementation of IC3 in python as part of my masters thesis. It is not optimized for performance.
 It is meant for me to understand and implement the algorithm and to experiment with optimizations.
@@ -141,9 +141,4 @@ if args.file:
         print_suite_summary(console, results)
     else:
         r_print('[red bold]ERROR:[/red bold] folder or file does not exist.')
-                
             
-
-elif args.benchmark:
-    # Handle benchmark verification
-    pass
