@@ -62,14 +62,23 @@ def propagate(Z, frames, T):
 
         if len(frames.F[k]) == 0:
             print(f'  Fixpoint: F[{k}] empty')
-            return True
+            return k
 
     return False  
 
+# drop a variable from the formula
+def drop_var(phi, v):
+    # g = Goal()
+    # t = Tactic('qe')
+    # g.add(Exists(v, phi))
+    return simplify(substitute(phi, (v, BoolVal(False))))
+
+
 def PDR(ckt, do_propagate=True, max_frames=200, use_ternary=True):
+    # if use_ternary = False then use unsat core
     variables = ckt.state
     vd, _ = bind(variables)
-    T = ckt.T()                       # relational transition for the SAT queries
+    T = ckt.T()                 
     init_expr = ckt.init_z3(vd)
     P_expr = ckt.prop_z3(vd)
 
@@ -105,13 +114,17 @@ def PDR(ckt, do_propagate=True, max_frames=200, use_ternary=True):
         frames.print_frames()
 
         if do_propagate and N >= 2:
-            if propagate(Z, frames, T):
-                inv = simplify(frames.get_R(N, vd))
-                print(f'\n*** Property HOLDS ***')
+            k = propagate(Z, frames, T)
+            if k:
+                inv = simplify(frames.get_R(k, vd))
+                if '__viol__' in vd:
+                    inv = drop_var(inv, vd['__viol__'])
+                print(f'\n* Property HOLDS *')
                 print(f'Invariant: {inv}')
                 Z._report_ternary()
                 return inv
 
     print(f'Reached max_frames.')
-    Z._report_ternary()
+    if use_ternary:
+        Z._report_ternary()
     return None

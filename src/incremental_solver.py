@@ -107,6 +107,34 @@ class IncrementalSolver:
             self.solver.pop()
             return ('blocked', None)
 
+    def generalize_unsat(self, cube, k, frames, T, init_expr):
+        vd, vdp = self._bind()
+        self.solver.push()
+        self.solver.add(frames.get_R(k - 1, vd))
+        self.solver.add(Not(cube_to_expr(cube, vd)))
+        self.solver.add(T(vd, vdp))
+
+        acts, assumptions = {}, []
+        for var, val in cube.items():
+            act = Bool(f'__act_{var}')
+            self.solver.add(Implies(act, vdp[var] if val else Not(vdp[var])))
+            acts[act.decl().name()] = var
+            assumptions.append(act)
+
+        if self.solver.check(assumptions) != unsat:
+            self.solver.pop()
+            return dict(cube)
+
+        core = self.solver.unsat_core()
+        self.solver.pop()
+
+        gen = {acts[c.decl().name()]: cube[acts[c.decl().name()]] for c in core}
+        for var, val in cube.items():
+            if not self.isInitial(gen, init_expr):
+                break
+            gen[var] = val
+        return gen
+        
     def generalize(self, cube, k, frames, T, init_expr):
         cube = dict(cube)
         for v in list(cube.keys()):
