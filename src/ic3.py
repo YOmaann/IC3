@@ -30,7 +30,8 @@ def recBlockCube(Z, frames, T, P_expr, init_expr, bad_cube, start_frame,
             continue
 
         status, pred = Z.solveRelative(
-            cube, frame, frames, T, extract_model=True, use_ind=True
+            cube, frame, frames, T, extract_model=True, use_ind=True,
+            core=use_unsatcore, init_expr=init_expr
         )
 
         if status == 'blocked':
@@ -38,11 +39,9 @@ def recBlockCube(Z, frames, T, P_expr, init_expr, bad_cube, start_frame,
             #     gen_cube = Z.generalize(cube, frame, frames, T, init_expr)
             # else:
             #     gen_cube = Z.generalize_unsat(cube, frame, frames, T, init_expr)
-            gen_cube = cube
+            gen_cube = pred if (use_unsatcore and pred is not None) else cube
             if use_ternary:
                 gen_cube = Z.generalize(gen_cube, frame, frames, T, init_expr)
-            if use_unsatcore:
-                gen_cube = Z.generalize_unsat(gen_cube, frame, frames, T, init_expr)
             if frames.add_blocked_cube(frame, gen_cube):
                 frames.learned += 1
             if report:

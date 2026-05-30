@@ -106,19 +106,29 @@ class IncrementalSolver:
         return res
 
     def solveRelative(self, cube, k, frames, T,
-                      extract_model=True, use_ind=True):
+                      extract_model=True, use_ind=True, core=False, init_expr=None):
         vd, vdp = self._bind()
         self.solver.push()
         if use_ind:
             self.solver.add(Not(cube_to_expr(cube, vd)))
-        self.solver.add(cube_to_expr(cube, vdp))
+
+        acts, cube_assumps = {}, []
+        if core:
+            for var, val in cube.items():
+                act = Bool(f'__act_{var}')
+                self.solver.add(Implies(act, vdp[var] if val else Not(vdp[var])))
+                acts[act.decl().name()] = var
+                cube_assumps.append(act)
+        else:
+            self.solver.add(cube_to_expr(cube, vdp))
+
         if k - 1 == 0:
             self.solver.add(frames.init_expr)
-            assumps = [self.act_T]
+            base = [self.act_T]
         else:
-            assumps = self._assume_R(k - 1) + [self.act_T]
+            base = self._assume_R(k - 1) + [self.act_T]
 
-        if self._check(assumps) == sat:
+        if self._check(base + cube_assumps) == sat:
             if extract_model:
                 m = self.solver.model()
                 pred = extract_cube(m, vd, self.variables)
@@ -135,42 +145,21 @@ class IncrementalSolver:
                 return ('pred', pred)
             self.solver.pop()
             return ('pred', None)
-        else:
+
+        if not core:
             self.solver.pop()
             return ('blocked', None)
 
-    def generalize_unsat(self, cube, k, frames, T, init_expr):
-        vd, vdp = self._bind()
-        self.solver.push()
-        self.solver.add(Not(cube_to_expr(cube, vd)))
-        if k - 1 == 0:
-            self.solver.add(frames.init_expr)
-            base = [self.act_T]
-        else:
-            base = self._assume_R(k - 1) + [self.act_T]
-
-        acts, assumptions = {}, []
-        for var, val in cube.items():
-            act = Bool(f'__act_{var}')
-            self.solver.add(Implies(act, vdp[var] if val else Not(vdp[var])))
-            acts[act.decl().name()] = var
-            assumptions.append(act)
-
-        if self._check(base + assumptions) != unsat:
-            self.solver.pop()
-            return dict(cube)
-
-        core = self.solver.unsat_core()
+        unsat = self.solver.unsat_core()
         self.solver.pop()
-
         gen = {acts[c.decl().name()]: cube[acts[c.decl().name()]]
-               for c in core if c.decl().name() in acts}
+               for c in unsat if c.decl().name() in acts}
         for var, val in cube.items():
             if not self.isInitial(gen, init_expr):
                 break
             gen[var] = val
-        return gen
-        
+        return ('blocked', gen)
+
     def generalize(self, cube, k, frames, T, init_expr):
         cube = dict(cube)
         for v in list(cube.keys()):
