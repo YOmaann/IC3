@@ -64,25 +64,18 @@ def verify_aiger_file(path, out_dir, task, max_frames, no_propagate, timeout_s, 
     on_update = make_on_update(progress, task, path.name)
 
     stats = None
-    # Set timeout handler
-    if timeout_s > 0:
-        signal.signal(signal.SIGALRM, handler)
-        signal.alarm(timeout_s)
-
     try:
         log_path = out_dir / f'{path.stem}.log'
         with open(log_path, 'w') as logf, contextlib.redirect_stdout(logf):
             inv, stats = PDR(ckt, do_propagate=not no_propagate,
                              max_frames=max_frames, use_ternary=not no_ternary,
-                             use_unsatcore=use_unsatcore, on_update=on_update)
+                             use_unsatcore=use_unsatcore, on_update=on_update,
+                             timeout_s=timeout_s)
         verdict = ('UNSAFE' if inv is False
                    else 'SAFE : property holds' if inv is not None
                    else 'UNKNOWN (frame bound reached)')
     except TimeoutError:
         verdict = f'TIMEOUT after {timeout_s}s'
-    finally:
-        if timeout_s > 0:
-            signal.alarm(0)
 
     return verdict, stats, parsed
 

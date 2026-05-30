@@ -92,7 +92,7 @@ def drop_var(phi, v):
 
 
 def PDR(ckt, do_propagate=True, max_frames=200, use_ternary=True, use_unsatcore=False,
-        on_update=None):
+        on_update=None, timeout_s=0):
     variables = ckt.state
     vd, _ = bind(variables)
     T = ckt.T()                 
@@ -100,7 +100,7 @@ def PDR(ckt, do_propagate=True, max_frames=200, use_ternary=True, use_unsatcore=
     P_expr = ckt.prop_z3(vd)
 
     frames = DeltaFrames(init_expr, variables)
-    Z = IncrementalSolver(variables, ckt, use_ternary=use_ternary)
+    Z = IncrementalSolver(variables, ckt, use_ternary=use_ternary, timeout_s=timeout_s)
     t0 = time.perf_counter()
     finish = make_finish(frames, Z, t0)
     report = make_report(on_update, frames, Z, t0)

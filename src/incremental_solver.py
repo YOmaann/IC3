@@ -1,19 +1,29 @@
+import time
 from z3 import *
 from utils.utils import *
 from circuit import *
 
 class IncrementalSolver:
-    def __init__(self, variables, ckt, use_ternary=True):
+    def __init__(self, variables, ckt, use_ternary=True, timeout_s=0):
         self.solver = Solver()
         self.variables = variables
         self.ckt = ckt                       # the circuit, for ternary simulation
         self.use_ternary = use_ternary
+        self.deadline = (time.monotonic() + timeout_s) if timeout_s and timeout_s > 0 else None
         self.stats = {'minterms': 0, 'lits_in': 0, 'lits_out': 0, 'probes': 0,
                       'sat_calls': 0}
 
     def _check(self, *assumptions):
         self.stats['sat_calls'] += 1
-        return self.solver.check(*assumptions)
+        if self.deadline is not None:
+            remaining = self.deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('timeout')
+            self.solver.set('timeout', max(1, int(remaining * 1000)))
+        result = self.solver.check(*assumptions)
+        if result == unknown:
+            raise TimeoutError('timeout')
+        return result
 
     def _bind(self):
         return bind(self.variables)
