@@ -3,6 +3,8 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TaskProgressColum
 from rich.console import Console, Group
 from rich.live import Live
 from rich.layout import Layout
+from rich.panel import Panel
+from rich.align import Align
 import argparse
 from utils.print import print
 from utils.timeout import handler
@@ -14,6 +16,24 @@ from aiger import sanitize_aiger_file, load_aiger_file, aiger_to_circuit
 from pathlib import Path
 import signal, contextlib, io, os, sys
 from ic3 import PDR
+
+
+# Banner
+
+
+BANNER = r"""
+      /\_/\\
+     ( •.• )
+      > ^ <
+
+[F0]  ──▶ [F2]
+              \
+               \(ฅ)
+                 ✕
+                 │
+               [BAD]
+"""
+
 
 # Rich configurations
 console = Console(file=sys.stdout)
@@ -98,10 +118,19 @@ parser.add_argument('--max-latches', type=int, default=1000,
 args = parser.parse_args()
 
 r_print('Welcome to [bold magenta]ICEpie[/bold magenta] :)\n')
-if not args.file:
+if not args.file or len(sys.argv) == 1:
+    console.print(
+        Align.center(
+            Panel.fit(
+                BANNER,
+                title="[bold cyan]ICEpie[/bold cyan]",
+                # subtitle="[dim]IC3 / PDR[/dim]",
+                border_style="cyan",
+            ))
+        )
     r_print('[red]Oops :0 Please provide either a file or a benchmark to verify.[/red]')
     r_print('''This is an implementation of IC3 in python as part of my masters thesis. It is not optimized for performance.
-It is meant for me to understand and implement the algorithm and to experiment with optimizations.
+            It is meant for me to understand and implement the algorithm and to experiment with optimizations.
             \n [yellow]Press -h to view help.[/yellow]''')
 
     exit()
