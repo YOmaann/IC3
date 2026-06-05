@@ -1,5 +1,7 @@
 # ICEpie
 
+![ICEpie](assets/logo.png)
+
 This is an implementation of IC3 in python. This implementation is part of my masters thesis in CMI.
 
 ## Features Implemented
